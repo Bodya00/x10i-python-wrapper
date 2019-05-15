@@ -157,7 +157,7 @@ cdef class PyFireFlyUSB:
             'PORT_RS232_POLLED': PORT_RS232_POLLED,
             'PORT_CCTALK': PORT_CCTALK,
             'PORT_CCTALK_MODE1': PORT_CCTALK_MODE1,
-            'PORT_MOB_SLAVE': PORT_MOB_SLAVE
+            'PORT_MDB_SLAVE': PORT_MDB_SLAVE
         }
 
     def __dealloc__(self):
