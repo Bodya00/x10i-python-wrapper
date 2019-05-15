@@ -49,7 +49,7 @@ cdef extern from *:
             PORT_RS232_POLLED,
             PORT_CCTALK,
             PORT_CCTALK_MODE1,
-            PORT_MOB_SLAVE
+            PORT_MDB_SLAVE
 
         ctypedef struct LPDCB:
             int BaudRate
