@@ -9,6 +9,7 @@ extensions = [
 ]
 
 setup(
+    name="fflyusb_wrapper",
     ext_modules=cythonize(extensions),
     cmdclass={'build_ext': build_ext}
 )

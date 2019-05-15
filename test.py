@@ -43,11 +43,16 @@ def main():
             # time 10x cached calls.
             time.sleep(1)
             x10i.StartSecuritySwitchRead()
-            for x in range(0, 9):
-                CachedReadAndResetSecuritySwitchFlags(x10i)
-                time.sleep(0.5)
-
-
+            pressed = {248:None,186:None,191: None,184:None,0:None,250: None,253:None,189:None}
+            _last = 0
+            while True:
+                a = x10i.GetInputs()
+                if a != 255 and pressed[a] is None:
+                     pressed[a] = False
+                     _last = a
+                if a == 255 and  pressed[_last] == False:
+                     print(f'send {_last}')
+                     pressed[_last] = None
     # x10i.RelockHardware()                # causes PIC information to become unavailable?
 
 if __name__ == '__main__':
