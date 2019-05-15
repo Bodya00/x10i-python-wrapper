@@ -53,9 +53,9 @@ cdef extern from *:
 
         ctypedef struct LPDCB:
             int BaudRate
-            int fParity = 1
-            int fOutxCtsFlow = 1
-            int fRtsControl = 2
+            int fParity
+            int fOutxCtsFlow
+            int fRtsControl
             int Parity
 
         cdef int MAX_POLL_MSG_LENGTH = 25
