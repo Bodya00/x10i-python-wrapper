@@ -3,7 +3,7 @@ import profile
 from pythonbenchmark import compare, measure
 import fflyusb_wrapper
 import time
-
+from collections import defaultdict,deque
 @measure
 def CachedReadAndResetSecuritySwitchFlags(x10i):
     x10i.CachedReadAndResetSecuritySwitchFlags()
