@@ -51,7 +51,7 @@ cdef extern from *:
             PORT_CCTALK_MODE1,
             PORT_MDB_SLAVE
 
-        ctypedef struct LPDCB:
+        ctypedef struct _DCB:
             int BaudRate
             int fParity
             int fOutxCtsFlow
@@ -96,7 +96,7 @@ cdef extern from *:
             bool ConfigureReelsEx(char numberOfReels, int halfStepsPerTurn, char stepsPerSymbol)
             bool SetOutputBrightness(char brightness)
 
-            bool SetConfig(usbSerialPort port, LPDCB config, usbPortType ptype)
+            bool SetConfig(usbSerialPort port, _DCB* config, usbPortType ptype)
             # CCTalk Mode 1 and RS232 Polled Mode
             bool ConfigureCCTalkPort(usbSerialPort port, CCTalkConfig *cctalkConfig)
             bool SetPolledHostTimeout(usbSerialPort port, unsigned char*deviceNumber, double timeout)
@@ -173,14 +173,6 @@ cdef class PyFireFlyUSB:
     def close(self):
         return self.thisptr.close()
 
-    def to_LDCB(self, config: dict):
-        cdef LPDCB cconfig
-        cconfig.BaudRate = config['BaudRate']
-        cconfig.fParity = 1
-        cconfig.fOutxCtsFlow = 1
-        cconfig.fRtsControl = 2
-        cconfig.Parity = config['Parity']
-        return cconfig
 
     def GetRawInputs(self):
         cdef usbInput temp
@@ -270,14 +262,20 @@ cdef class PyFireFlyUSB:
 
     def SetConfig(self, port: str, config: dict, ptype: str):
         cdef usbSerialPort _port
-        cdef LPDCB _config
+        cdef _DCB* cconfig
         cdef usbPortType _ptype
 
+        cconfig.BaudRate = config['BaudRate']
+        cconfig.fParity = 1
+        cconfig.fOutxCtsFlow = 1
+        cconfig.fRtsControl = 2
+        cconfig.Parity = config['Parity']
+
+
         _port = self.usbSerialPort[port]
-        _config = self.to_LDCB(config)
         _ptype = self.usbPortType[ptype]
 
-        self.thisptr.SetConfig(_port, _config, _ptype)
+        self.thisptr.SetConfig(_port, cconfig, _ptype)
 
     # Security pipe functions.
     def GetPICVersion(self):
