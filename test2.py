@@ -1,22 +1,25 @@
-import profile
-# pip install pythonbenchmark
-from pythonbenchmark import compare, measure
-import fflyusb_wrapper
 import time
 
-@measure
-def CachedReadAndResetSecuritySwitchFlags(x10i):
-    x10i.CachedReadAndResetSecuritySwitchFlags()
+import fflyusb_wrapper
 
-def test_something(*args,**kwargs):
-   print('changes')
 
 def main():
-
     x10i = fflyusb_wrapper.PyFireFlyUSB()
     x10i.init(0)
-    print(x10i.ConfigureChangedInputsCallback(test_something))
+    x10i.UnlockHardware()
+    x10i.GetProductVersion()
+    print(x10i.ProductVersion)
+
+    port = 'PORT_A'
+    ptype = 'PORT_CCTALK_MODE1'
+    config = {
+        'BaudRate': 9600,
+        'Parity': 'NOPARITY'
+    }
+    print(x10i.SetConfig(port, config, ptype))
+
+
 if __name__ == '__main__':
-    #profile.run('main()')
+    # profile.run('main()')
     main()
     time.sleep(10000000)
