@@ -5,13 +5,13 @@
 ## distutils: library_dirs = /usr/src/xlinedevkit_x64/lib/
 ## distutils: runtime_library_dirs = /usr/lib/
 
-
 # distutils: include_dirs = /usr/src/xlinedevkit_x64/include/
 # distutils: libraries = fflyusb_x64
 # distutils: extra_objects = /usr/src/xlinedevkit_x64/lib/unlockio_x64.o
 # distutils: extra_link_args = -pthread
 # distutils: extra_compile_args = -Wall -O2 -DX10_LINUX_BUILD -fPIC
 # distutils: language = c++
+from libcpp.string cimport string
 
 from libcpp cimport bool
 
@@ -56,19 +56,19 @@ cdef extern from *:
             int fParity
             int fOutxCtsFlow
             int fRtsControl
-            int Parity
+            unsigned char Parity
 
         cdef int MAX_POLL_MSG_LENGTH = 25
         ctypedef struct CCTalkConfig:
-            unsigned char*device_number  # Device number(0 - 3)
+            int device_number  # Device number(0 - 3)
             PollMethod method  # Poll method: Disabled, Once or Repeated
-            unsigned char*next_trigger_device  #Next device to trigger.Set to NO_TRIGGER if not needed.
-            unsigned char*poll_retry_count  # Number of retries before sending an inhibit message
+            int next_trigger_device  #Next device to trigger.Set to NO_TRIGGER if not needed.
+            int poll_retry_count  # Number of retries before sending an inhibit message
             int polling_interval  # Polling interval(0 - 2550ms)
             int max_response_time  # Max time to wait for response(0 - 65535ms)
-            unsigned char*min_buffer_space  # Min receive buffer space allowed
-            unsigned char*poll_msg[25]  # Poll message
-            unsigned char*inhibit_msg[25]  # Device inhibit message
+            int min_buffer_space  # Min receive buffer space allowed
+            unsigned int poll_msg[25]  # Poll message
+            unsigned int inhibit_msg[25]  # Device inhibit message
 
         cdef cppclass FireFlyUSB:
             FireFlyUSB()
@@ -101,9 +101,10 @@ cdef extern from *:
             bool ConfigureCCTalkPort(usbSerialPort port, CCTalkConfig *cctalkConfig)
             bool SetPolledHostTimeout(usbSerialPort port, unsigned char*deviceNumber, double timeout)
             bool EmptyPolledBuffer(usbSerialPort port, unsigned char*deviceNumber)
-            bool ReceivePolledMessage(usbSerialPort port, unsigned char*deviceNumber, unsigned char*data, int length,
-                                      bool *inhibited)
-            bool DeletePolledMessage(usbSerialPort port, unsigned char*deviceNumber)
+            bool ReceivePolledMessage(usbSerialPort port, unsigned char deviceNumber, unsigned char*data,
+                                      long unsigned int *length,
+                                      unsigned int* inhibited)
+            bool DeletePolledMessage(usbSerialPort port, unsigned char deviceNumber)
 
             bool SetClock(unsigned int time)
             bool GetClock(unsigned int*time)
@@ -140,21 +141,121 @@ cdef class PyFireFlyUSB:
     def __cinit__(self):
         self.thisptr = new FireFlyUSB()
 
-    def __init__(self):
-        self.usbSerialPort = {
+    def __dealloc__(self):
+        del self.thisptr
+
+    #
+    def init(self, int BoardNumber):
+        return self.thisptr.init(BoardNumber)
+
+        #
+    def close(self):
+        return self.thisptr.close()
+
+    def GetRawInputs(self):
+        cdef usbInput temp
+        success = self.thisptr.GetRawInputs(&temp)
+        return temp.byIn[0], temp.byIn[1], temp.byIn[2]
+
+    def GetChangedInputs(self):
+        cdef usbInput temp
+        success = self.thisptr.GetChangedInputs(&temp)
+        return temp.byIn[0], temp.byIn[1], temp.byIn[2]
+
+    def GetInputs(self):
+        cdef usbInput temp
+        success = self.thisptr.GetInputs(&temp)
+        return temp.byIn[0]
+        # I an attempt to make things more pythonic we use the wrapper to do
+        # the housekeeping, i.e. changing the returned bytearray into a Pyhon string.
+
+        #
+    def GetFittedBoard(self):
+        temp = bytearray(4)
+        success = self.thisptr.GetFittedBoard(temp)
+        self.FittedBoard = temp[0]
+        del temp
+        return success
+
+        #
+    def GetBoardSpeed(self):
+        temp = bytearray(4)
+        success = self.thisptr.GetBoardSpeed(temp)
+        self.BoardSpeed = temp[0]
+        del temp
+        return success
+
+        #
+    def GetProductVersion(self):
+        temp = bytearray(20)
+        success = self.thisptr.GetProductVersion(temp)
+        self.ProductVersion = temp.decode('utf-8').strip('\x00')
+        del temp
+        return success  # {'ProductVersion', self.ProductVersion}
+
+        #
+    def GetDllVersion(self):
+        temp = bytearray(20)
+        success = self.thisptr.GetDllVersion(temp)
+        self.DllVersion = temp.decode('utf-8').strip('\x00')
+        del temp
+        return success  # {'DllVersion', self.DllVersion}
+
+        #
+    def Get8051Version(self):
+        temp = bytearray(20)
+        success = self.thisptr.Get8051Version(temp)
+        self._8051Version = temp.decode('utf-8').strip('\x00')
+        del temp
+        return success  # {'8051Version', self._8051Version}
+
+    def GetLastError(self):
+        pass
+
+        # IO Pipe functions.
+
+    def SetOnPeriodOutputs(self, onPeriods):
+        cdef usbOutput temp
+        temp.byOut[0] = onPeriods[0]
+        temp.byOut[1] = onPeriods[1]
+        temp.byOut[2] = onPeriods[2]
+        temp.byOut[3] = onPeriods[3]
+        temp.byAux = onPeriods[4]
+        return self.thisptr.SetOnPeriodOutputs(temp)
+
+    def SetOffPeriodOutputs(self, offPeriods):
+        cdef usbOutput temp
+        temp.byOut[0] = offPeriods[0]
+        temp.byOut[1] = offPeriods[1]
+        temp.byOut[2] = offPeriods[2]
+        temp.byOut[3] = offPeriods[3]
+        temp.byAux = offPeriods[4]
+        return self.thisptr.SetOffPeriodOutputs(temp)
+
+    def ConfigureReelsEx(self, numberOfReels, halfStepsPerTurn, stepsPerSymbol):
+        return self.thisptr.ConfigureReelsEx(numberOfReels, halfStepsPerTurn, stepsPerSymbol)
+
+    def SetOutputBrightness(self, brightness):
+        return self.thisptr.SetOutputBrightness(brightness)
+
+    def SetConfig(self, port: str, config: dict, ptype: str):
+        cdef usbSerialPort _port
+        cdef _DCB cconfig
+        cdef usbPortType _ptype
+
+        cconfig.BaudRate = config['BaudRate']
+        cconfig.fParity = 0
+        cconfig.fOutxCtsFlow = 0
+        cconfig.fRtsControl = 3
+        cconfig.Parity = config['Parity']
+
+        usbSerialPort = {
             'PORT_A': PORT_A,
             'PORT_B': PORT_B,
             'NUM_SERIAL_PORTS': NUM_SERIAL_PORTS
         }
 
-        self.PollMethod = {
-            'Disabled': Disabled,
-            'Once': Once,
-            'Repeated': Repeated,
-            'Triggered': Triggered
-        }
-
-        self.usbPortType = {
+        usbPortType = {
             'PORT_RS232': PORT_RS232,
             'PORT_RS232_POLLED': PORT_RS232_POLLED,
             'PORT_CCTALK': PORT_CCTALK,
@@ -162,232 +263,181 @@ cdef class PyFireFlyUSB:
             'PORT_MDB_SLAVE': PORT_MDB_SLAVE
         }
 
-def __dealloc__(self):
-    del self.thisptr
+        _port = usbSerialPort[port]
+        _ptype = usbPortType[ptype]
 
-    # System Functions.
+        return self.thisptr.SetConfig(_port, &cconfig, _ptype)
 
-    #
-def init(self, int BoardNumber):
-    return self.thisptr.init(BoardNumber)
+    cpdef ConfigureCCTalkPort(self, port: str, config: dict, poll_method: str):
+        cdef usbSerialPort _port
+        cdef CCTalkConfig cconfig
 
-    #
-def close(self):
-    return self.thisptr.close()
+        usbSerialPort = {
+            'PORT_A': PORT_A,
+            'PORT_B': PORT_B,
+            'NUM_SERIAL_PORTS': NUM_SERIAL_PORTS
+        }
+        _port = usbSerialPort[port]
 
-def GetRawInputs(self):
-    cdef usbInput temp
-    success = self.thisptr.GetRawInputs(&temp)
-    return temp.byIn[0], temp.byIn[1], temp.byIn[2]
+        poll_methods = {
+            'Disabled': Disabled,
+            'Once': Once,
+            'Repeated': Repeated,
+            'Triggered': Triggered
+        }
 
-def GetChangedInputs(self):
-    cdef usbInput temp
-    success = self.thisptr.GetChangedInputs(&temp)
-    return temp.byIn[0], temp.byIn[1], temp.byIn[2]
+        _poll_method = poll_methods[poll_method]
 
-def GetInputs(self):
-    cdef usbInput temp
-    success = self.thisptr.GetInputs(&temp)
-    return temp.byIn[0]
-    # I an attempt to make things more pythonic we use the wrapper to do
-    # the housekeeping, i.e. changing the returned bytearray into a Pyhon string.
+        cconfig.device_number = config['device_number']  # 0 - 3
+        cconfig.method = _poll_method  # Poll method: Disabled, Once or Repeated
+        cconfig.next_trigger_device = 4  #Next device to trigger.Set to NO_TRIGGER if not needed.
+        cconfig.poll_retry_count = config['poll_retry_count']  # Number of retries before sending an inhibit message
+        cconfig.polling_interval = config['polling_interval']  # Polling interval(0 - 2550ms)
+        cconfig.max_response_time = config['max_response_time']  # Max time to wait for response(0 - 65535ms)
+        cconfig.min_buffer_space = config['min_buffer_space']  # Min receive buffer space allowed
+        cconfig.poll_msg = config['poll_msg']  # Poll message
+        cconfig.inhibit_msg = config['inhibit_msg']  # Device inhibit message
 
-    #
-def GetFittedBoard(self):
-    temp = bytearray(4)
-    success = self.thisptr.GetFittedBoard(temp)
-    self.FittedBoard = temp[0]
-    del temp
-    return success
+        return self.thisptr.ConfigureCCTalkPort(_port, &cconfig)
 
-    #
-def GetBoardSpeed(self):
-    temp = bytearray(4)
-    success = self.thisptr.GetBoardSpeed(temp)
-    self.BoardSpeed = temp[0]
-    del temp
-    return success
+    def ReceivePolledMessage(self, port:str, deviceNumber: int):
+        cdef usbSerialPort _port
+        data = bytearray(250)
+        cdef unsigned long  length
+        cdef unsigned int inhibited
 
-    #
-def GetProductVersion(self):
-    temp = bytearray(20)
-    success = self.thisptr.GetProductVersion(temp)
-    self.ProductVersion = temp.decode('utf-8').strip('\x00')
-    del temp
-    return success  # {'ProductVersion', self.ProductVersion}
+        usbSerialPort = {
+            'PORT_A': PORT_A,
+            'PORT_B': PORT_B,
+            'NUM_SERIAL_PORTS': NUM_SERIAL_PORTS
+        }
+        _port = usbSerialPort[port]
+        self.thisptr.ReceivePolledMessage(_port, deviceNumber, data, &length, &inhibited)
 
-    #
-def GetDllVersion(self):
-    temp = bytearray(20)
-    success = self.thisptr.GetDllVersion(temp)
-    self.DllVersion = temp.decode('utf-8').strip('\x00')
-    del temp
-    return success  # {'DllVersion', self.DllVersion}
+        return data, length, inhibited
 
-    #
-def Get8051Version(self):
-    temp = bytearray(20)
-    success = self.thisptr.Get8051Version(temp)
-    self._8051Version = temp.decode('utf-8').strip('\x00')
-    del temp
-    return success  # {'8051Version', self._8051Version}
+    def DeletePolledMessage(self, port:str, device_number:int):
+        cdef usbSerialPort _port
 
-def GetLastError(self):
-    pass
-
-    # IO Pipe functions.
-
-def SetOnPeriodOutputs(self, onPeriods):
-    cdef usbOutput temp
-    temp.byOut[0] = onPeriods[0]
-    temp.byOut[1] = onPeriods[1]
-    temp.byOut[2] = onPeriods[2]
-    temp.byOut[3] = onPeriods[3]
-    temp.byAux = onPeriods[4]
-    return self.thisptr.SetOnPeriodOutputs(temp)
-
-def SetOffPeriodOutputs(self, offPeriods):
-    cdef usbOutput temp
-    temp.byOut[0] = offPeriods[0]
-    temp.byOut[1] = offPeriods[1]
-    temp.byOut[2] = offPeriods[2]
-    temp.byOut[3] = offPeriods[3]
-    temp.byAux = offPeriods[4]
-    return self.thisptr.SetOffPeriodOutputs(temp)
-
-def ConfigureReelsEx(self, numberOfReels, halfStepsPerTurn, stepsPerSymbol):
-    return self.thisptr.ConfigureReelsEx(numberOfReels, halfStepsPerTurn, stepsPerSymbol)
-
-def SetOutputBrightness(self, brightness):
-    return self.thisptr.SetOutputBrightness(brightness)
-
-def SetConfig(self, port: str, config: dict, ptype: str):
-    cdef usbSerialPort _port
-    cdef _DCB*cconfig
-    cdef usbPortType _ptype
-
-    cconfig.BaudRate = config['BaudRate']
-    cconfig.fParity = 1
-    cconfig.fOutxCtsFlow = 1
-    cconfig.fRtsControl = 2
-    cconfig.Parity = config['Parity']
-
-    _port = self.usbSerialPort[port]
-    _ptype = self.usbPortType[ptype]
-
-    self.thisptr.SetConfig(_port, cconfig, _ptype)
+        usbSerialPort = {
+            'PORT_A': PORT_A,
+            'PORT_B': PORT_B,
+            'NUM_SERIAL_PORTS': NUM_SERIAL_PORTS
+        }
+        _port = usbSerialPort[port]
+        return self.thisptr.DeletePolledMessage(_port, device_number)
 
     # Security pipe functions.
-def GetPICVersion(self):
-    temp = bytearray(10)
-    success = self.thisptr.GetPICVersion(temp)
-    # Error in API with data after \0 so let fix it.
-    self.PICVersion = "".join(chr(x) for x in bytearray(temp)).split('\0', 1)[0]
-    return success  # {'PICVersion', self.PICVersion}
+    def GetPICVersion(self):
+        temp = bytearray(10)
+        success = self.thisptr.GetPICVersion(temp)
+        # Error in API with data after \0 so let fix it.
+        self.PICVersion = "".join(chr(x) for x in bytearray(temp)).split('\0', 1)[0]
+        return success  # {'PICVersion', self.PICVersion}
 
-    #
-def GetPICSerialNumber(self):
-    temp = bytearray(9)
-    success = self.thisptr.GetPICSerialNumber(temp)
-    self.PICSerialNumber = "".join(chr(x) for x in bytearray(temp))
-    return success  # {'PICSerialNumber', self.PICSerialNumber}
+        #
+    def GetPICSerialNumber(self):
+        temp = bytearray(9)
+        success = self.thisptr.GetPICSerialNumber(temp)
+        self.PICSerialNumber = "".join(chr(x) for x in bytearray(temp))
+        return success  # {'PICSerialNumber', self.PICSerialNumber}
 
-def SetPICSerialNumber(self):
-    pass
+    def SetPICSerialNumber(self):
+        pass
 
-def GetDallasSerialNumber(self):
-    dallas = bytearray(8)
-    crc = bytearray(4)
-    success = self.thisptr.GetDallasSerialNumber(dallas, crc)
-    print('family code = {}'.format(dallas[0]))
-    print('Unique serial = {}.{}.{}.{}.{}.{}'.format(dallas[1], dallas[2], dallas[3], dallas[4], dallas[5],
-                                                     dallas[6]))
-    print('CRC = {}'.format(dallas[7]))
-    print('crc = {}'.format(crc))
+    def GetDallasSerialNumber(self):
+        dallas = bytearray(8)
+        crc = bytearray(4)
+        success = self.thisptr.GetDallasSerialNumber(dallas, crc)
+        print('family code = {}'.format(dallas[0]))
+        print('Unique serial = {}.{}.{}.{}.{}.{}'.format(dallas[1], dallas[2], dallas[3], dallas[4], dallas[5],
+                                                         dallas[6]))
+        print('CRC = {}'.format(dallas[7]))
+        print('crc = {}'.format(crc))
 
-    # Security clock
+        # Security clock
 
-def SetClock(self, time):
-    return self.thisptr.SetClock(time)
+    def SetClock(self, time):
+        return self.thisptr.SetClock(time)
 
-def GetClock(self):
-    pass
-    #return self.thisptr.GetClock(self.security_time)
+    def GetClock(self):
+        pass
+        #return self.thisptr.GetClock(self.security_time)
 
-def RelockHardware(self):
-    return self.thisptr.RelockHardware()
+    def RelockHardware(self):
+        return self.thisptr.RelockHardware()
 
-    # Security switches
+        # Security switches
 
-def NextSecuritySwitchRead(self):
-    cdef unsigned long time
-    cdef unsigned char switches
-    success = self.thisptr.NextSecuritySwitchRead(&time, &switches)
-    self.security_time = time
-    self.security_switches = switches
-    return success
+    def NextSecuritySwitchRead(self):
+        cdef unsigned long time
+        cdef unsigned char switches
+        success = self.thisptr.NextSecuritySwitchRead(&time, &switches)
+        self.security_time = time
+        self.security_switches = switches
+        return success
 
-def StartSecuritySwitchRead(self):
-    return self.thisptr.StartSecuritySwitchRead()
+    def StartSecuritySwitchRead(self):
+        return self.thisptr.StartSecuritySwitchRead()
 
-def ClearSecuritySwitches(self):
-    return self.thisptr.ClearSecuritySwitches()
+    def ClearSecuritySwitches(self):
+        return self.thisptr.ClearSecuritySwitches()
 
-def ReadAndResetSecuritySwitchFlags(self):
-    cdef unsigned char openSwitches
-    cdef unsigned char closedSwitches
-    success = self.thisptr.ReadAndResetSecuritySwitchFlags(&closedSwitches, &openSwitches)
-    self.security_closedSwitches = closedSwitches
-    self.security_openSwitches = openSwitches
-    return success
+    def ReadAndResetSecuritySwitchFlags(self):
+        cdef unsigned char openSwitches
+        cdef unsigned char closedSwitches
+        success = self.thisptr.ReadAndResetSecuritySwitchFlags(&closedSwitches, &openSwitches)
+        self.security_closedSwitches = closedSwitches
+        self.security_openSwitches = openSwitches
+        return success
 
-def CachedReadAndResetSecuritySwitchFlags(self):
-    cdef unsigned char openSwitches
-    cdef unsigned char closedSwitches
-    success = self.thisptr.CachedReadAndResetSecuritySwitchFlags(&closedSwitches, &openSwitches)
-    self.security_closedSwitches = closedSwitches
-    self.security_openSwitches = openSwitches
-    return success
+    def CachedReadAndResetSecuritySwitchFlags(self):
+        cdef unsigned char openSwitches
+        cdef unsigned char closedSwitches
+        success = self.thisptr.CachedReadAndResetSecuritySwitchFlags(&closedSwitches, &openSwitches)
+        self.security_closedSwitches = closedSwitches
+        self.security_openSwitches = openSwitches
+        return success
 
-    # Security battery
+        # Security battery
 
-def ReadAndResetBatteryFailFlag(self):
-    pass
+    def ReadAndResetBatteryFailFlag(self):
+        pass
 
-def ReadAndResetRTCFailure(self):
-    pass
+    def ReadAndResetRTCFailure(self):
+        pass
 
-def EnableRandomNumberGenerator(self):
-    pass
+    def EnableRandomNumberGenerator(self):
+        pass
 
-    # random number generator
+        # random number generator
 
-def GetRandomNumber(self):
-    pass
+    def GetRandomNumber(self):
+        pass
 
-def EnableRandomNumberGenerator(self):
-    pass
+    def EnableRandomNumberGenerator(self):
+        pass
 
-def DisableRandomNumberGenerator(self):
-    pass
+    def DisableRandomNumberGenerator(self):
+        pass
 
-def ReadAndResetRTCFailure(self):
-    pass
+    def ReadAndResetRTCFailure(self):
+        pass
 
-def ReadClockAtBatteryFailure(self):
-    pass
+    def ReadClockAtBatteryFailure(self):
+        pass
 
-    #
-def UnlockHardware(self):
-    return UnlockX10(self.thisptr)
+        #
+    def UnlockHardware(self):
+        return UnlockX10(self.thisptr)
 
-    #
-def UnlockHardwareRecheck(self):
-    return UnlockX10Recheck(self.thisptr)
+        #
+    def UnlockHardwareRecheck(self):
+        return UnlockX10Recheck(self.thisptr)
 
-    #
-def VerifyHardwareUnlockLibrary(self):
-    return VerifyX10UnlockLibrary(self.thisptr)
+        #
+    def VerifyHardwareUnlockLibrary(self):
+        return VerifyX10UnlockLibrary(self.thisptr)
 
 
 
